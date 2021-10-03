@@ -18,7 +18,7 @@ void xargs(int argc, char *argv[]){
   char line[LINE_LEN + 1];
 
   while (strlen(gets(line, LINE_LEN + 1)) > 0) {
-    //Checking line is crosed
+    //Checking line is  crosed
     if (strlen(line) > LINE_LEN) {
       printf("Line length crossed %d", LINE_LEN);
       exit(1);
