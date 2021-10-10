@@ -65,6 +65,7 @@ kfree(void *pa)
 // Allocate one 4096-byte page of physical memory.
 // Returns a pointer that the kernel can use.
 // Returns 0 if the memory cannot be allocated.
+
 void *
 kalloc(void)
 {
@@ -79,4 +80,19 @@ kalloc(void)
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
+}
+//Get the number of bytes of free memory
+int
+freemem(void)
+{
+  int n = 0;
+  struct run *r;
+  acquire(&kmem.lock);
+
+  for (r = kmem.freelist; r; r = r->next)
+    ++n;
+
+  release(&kmem.lock);
+
+  return n * 4096;
 }
