@@ -1,0 +1,19 @@
+1. Ktoré iné systémové volania môžu byť urýchlené prostredníctvom tejto zdieľanej stránky? Vysvetlite ako. 
+fork - pri zavolani fork() sa skpiruje cela pamat rodica co je zbytocne,
+       kedze sa vsetko zahodi, da sa to zrychlit pouzitim "copy-on-write fork"-om
+       a to tak, ze sa pouziju aj v potomkovi rovnake stranky ako v rodicovskom
+       procese a az pri pokuse o zapis, aby sa neprepisali data aj v rodicovi(alebo naopak),
+       sa to odcleni
+
+2. Vysvetlite výstup funkcie vmprint() a jeho súvis s obrázkom 3-4 z xv6 knižky. 
+Vypise tabulky 3 urovni, L2, L1, L0. Jednu tabulku urovne L2 s indexami 0 az 254. 
+Na indexe 0 ma tabulku urovne L1 s indexom 0 v ktorej ma vyuzitu tabulku urovne L0 s indexami 0 az 2.
+
+3. Čo obsahuje stránka 0? 
+Tabulky stranok prveho procesu init pred jeho spustenim.
+4. Čo je v stránke 2?
+Druha cast tabulky trampoline, trapframe a namapovany usyscall.
+5. Keď proces beží v užívateľskom móde, môže prečítať/zapísať pamäť mapovanú stránkou 1?
+Nie.
+6. Čo obsahuje tretia stránka od konca?
+Zasobnik
