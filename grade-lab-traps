@@ -56,11 +56,15 @@ def test_alarmtest_test1():
 def test_alarmtest_test2():
     r.match('^\\.?test2 passed$')
 
+@test(10, "alarmtest: test3", parent=test_alarmtest)
+def test_alarmtest_test3():
+    r.match('^test3 passed$')
+
 @test(19, "usertests")
 def test_usertests():
     r.run_qemu(shell_script([
         'usertests'
-    ]), timeout=300)
+    ]), timeout=900)
     r.match('^ALL TESTS PASSED$')
 
 @test(1, "time")
