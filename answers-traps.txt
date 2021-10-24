@@ -1,0 +1,36 @@
+Ktoré registre obsahujú argumenty funkcií? 
+a0 az a5
+
+V ktorom registri je napríklad uložené číslo 13 (argument funkcie printf())? 
+a2
+
+Kde je volanie funkcie f() z funkcie main()? 
+a1, riadok 46 v call.asm
+
+Kde je volanie funkcie g()?
+na riadku 50 v call.asm
+
+Na ktorej adrese sa nachádza funkcia printf()?
+0x638
+
+Aká hodnota je v registri ra hneď po jalr do funkcie printf() vo funkcii main()?
+30
+
+Spustite tento kód:
+unsigned int i = 0x00646c72;
+printf("H%x Wo%s", 57616, &i);
+Aký je jeho výstup?
+HE110 World
+%x je hexa takze cislo 57616 sa vypise ako hexa 0xe110
+%s je string, bude vypisovat hodnotu i=0x00646c72 odzadu pretoze je little-endian:
+72 je r; 6c je l; 64 je d; 00 je ukoncenie retazca
+takze vypise rld
+
+Aký bude výstup závisí od toho, či je architektúra RISC-V little-endian. Ak by bol RISC-V big-endian, akú hodnotu by ste museli priradiť premennej i, aby bol výstup totožný?
+0x726c6400 , otocime poradie kedze teraz to pojde odpredu
+
+Bolo by tiež potrebné zmeniť hodnotu 57616?
+ano, na 4321
+
+Čo bude na výpise za 'y=' v nižšie uvedenom kóde? (poznámka: nie je to žiadna špecifická hodnota.) Prečo sa to deje?
+registre a0 az a5 sa pouzivaju pre argumenty, takze vypise sa obsah a2 ako dalsieho v poradi
