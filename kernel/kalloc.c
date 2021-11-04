@@ -18,16 +18,52 @@ struct run {
   struct run *next;
 };
 
+#define PA2IND(pa) (((uint64)pa - PGROUNDUP((uint64)end))/PGSIZE)
+
 struct {
   struct spinlock lock;
   struct run *freelist;
+  uint64 *cntref;
+  int frames_count;
 } kmem;
+
+uint64
+dec_ref(void *pa){
+  acquire(&kmem.lock);
+  uint64 ret;
+  if( kmem.cntref[PA2IND(pa)] == 0)
+    panic("dec_ref: cntref zero");
+  kmem.cntref[PA2IND(pa)] -= 1;
+  ret = kmem.cntref[PA2IND(pa)];
+  release(&kmem.lock);
+  return ret;
+}
+
+void
+inc_ref(void *pa){
+  acquire(&kmem.lock);
+  if (PA2IND(pa) > kmem.frames_count) {
+    panic("kmem.cntref out of range");
+  }
+  kmem.cntref[PA2IND(pa)] += 1;
+  release(&kmem.lock);
+}
 
 void
 kinit()
 {
+  int frames = 0;
+  uint64 addr = PGROUNDUP((uint64)end);
+
+  kmem.cntref = (uint64*)addr;
+  while(addr < PHYSTOP){
+    kmem.cntref[PA2IND(addr)] = 1;
+    addr += PGSIZE;
+    frames++;
+  }
+  kmem.frames_count = frames;
   initlock(&kmem.lock, "kmem");
-  freerange(end, (void*)PHYSTOP);
+  freerange(kmem.cntref+frames, (void*)PHYSTOP);
 }
 
 void
@@ -51,6 +87,10 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
+     // If ref count is not zero, silently continue.
+  if(dec_ref(pa) != 0)
+    return;
+
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
@@ -60,6 +100,15 @@ kfree(void *pa)
   r->next = kmem.freelist;
   kmem.freelist = r;
   release(&kmem.lock);
+}
+
+static void
+inc_ref_internal(void *pa)
+{
+  if (PA2IND(pa) > kmem.frames_count) {
+    panic("kmem.cntref out of range");
+  }
+  kmem.cntref[PA2IND(pa)]++;
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -72,8 +121,10 @@ kalloc(void)
 
   acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
+  if(r){
     kmem.freelist = r->next;
+     inc_ref_internal(r);
+  }
   release(&kmem.lock);
 
   if(r)

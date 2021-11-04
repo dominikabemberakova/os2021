@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -303,28 +305,69 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
-    if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
+    if((*pte & PTE_V) == 0){
+      panic("uvmcopy: page not present");}
+    if (*pte & PTE_W){
+    *pte ^= PTE_W;
+    *pte |= PTE_COW;
+  }
+    
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    if(mappages(new, i, PGSIZE, (uint64)pa, flags) != 0){
       goto err;
     }
+    inc_ref((void*)pa); 
   }
   return 0;
 
  err:
   uvmunmap(new, 0, i / PGSIZE, 1);
   return -1;
+}
+
+int
+_uvmcow(pte_t* pte)
+{
+  char *mem = kalloc();  //spravime alokaciu pamate: alokuj jednu stranku v ramke
+  if(mem == 0)
+    return -1;
+
+  //presunutie (kopirovanie udajov): skopiruj povodne data v ramke do novej stranky
+  uint64 pa = PTE2PA(*pte);  //ziskam fyz adresu
+  if (pa == 0)
+    return -1;
+
+  memmove(mem, (char*)pa, PGSIZE);
+  kfree((void*)pa);
+
+  *pte ^= PTE_COW;   //musi byt ze najprv priznaky
+  *pte |= PTE_W;
+  uint64 flags = PTE_FLAGS(*pte);  //a az potom flag
+  *pte = PA2PTE(mem) | flags;
+
+  return 0;
+}
+
+int
+uvmcow(pagetable_t pagetable, uint64 va)
+{
+  pte_t *pte;
+
+  if (va >= MAXVA)
+    return -1;
+  if((pte = walk(pagetable, PGROUNDDOWN(va), 0)) == 0)
+    return -1;
+  if((*pte & PTE_V) == 0)
+    return -1;
+  if((*pte & PTE_COW) == 0)
+    return -1;
+
+  return _uvmcow(pte);
 }
 
 // mark a PTE invalid for user access.
@@ -347,9 +390,19 @@ int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
+   pte_t *pte;
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+    if (va0 >= MAXVA)
+      return -1;
+    if((pte = walk(pagetable, PGROUNDDOWN(dstva), 0)) == 0)
+      return -1;
+    if((*pte & PTE_V) == 0)  
+      return -1;
+    if((*pte & PTE_COW))
+      if (uvmcow(pagetable, va0) != 0)
+        panic("uvmcow zlyhal");
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
