@@ -1,0 +1,9 @@
+Prečo v tabuľke chýbali kľúče, keď sme použili dve vlákna, 
+ale všetko bolo v poriadku pri jednom vlákne? 
+Nájdite postupnosť udalostí v dvoch vláknach, ktoré spôsobia takýto problém.
+
+
+Ak mame viac vlaknovy system a odlisne kluce, tak ked vlakno zapisuje, prepise data a kluc predosleho vlakna.
+Tym padom nastava strata udajov a v tabulke bude len kluc vlakna, ktore zapisovalo ako posledne.
+
+Ak by sme mali rovnake kluce alebo jedno-vlaknovy system, nebolo by potrebne zamykanie.
