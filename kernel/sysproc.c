@@ -6,6 +6,10 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "fcntl.h"
+#include "file.h"
 
 uint64
 sys_exit(void)
@@ -94,4 +98,86 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+uint64
+sys_mmap(void)
+{
+  struct proc *p = myproc();
+
+  int length;
+  int prot, flags, fd;
+
+  if (argint(1, &length) < 0 || argint(2, &prot) < 0 || argint(3, &flags) < 0 || argint(4, &fd) < 0)
+    return 0xffffffffffffffff;
+
+  struct file *f = p->ofile[fd];
+
+  if(!f->writable && (prot&PROT_WRITE) && flags == MAP_SHARED) 
+    return -1;
+  if (p->originalsize == -1)
+    p->originalsize = p->sz;
+
+  int index = 0;
+
+  for (; index < 16; index++){
+    if (p->vma[index].used == 0)
+      break;
+  }
+
+  if (index != 16){
+    filedup(f);
+    uint64 va = (p->sz);
+    p->sz = va + length;
+    p->vma[index].addr = va;
+    p->vma[index].end = PGROUNDUP(va + length);
+    p->vma[index].prot = prot;
+    p->vma[index].flags = flags;
+    p->vma[index].offset = 0;
+    p->vma[index].pf = f;
+    p->vma[index].used = 1;
+    return va;
+  }
+  else
+    return 0xffffffffffffffff;
+}
+
+uint64
+sys_munmap(void)
+{
+  struct proc *p = myproc();
+
+  uint64 addr;
+  int len;
+
+  if (argaddr(0, &addr) < 0 || argint(1, &len) < 0)
+    return -1;
+
+  int index = 0;
+
+  for (; index < 16; index++){
+    if (p->vma[index].used == 1 && p->vma[index].addr <= addr && addr<p->vma[index].end){  
+      if(p->vma[index].flags==MAP_SHARED){
+        begin_op();
+        ilock(p->vma[index].pf->ip);
+        writei(p->vma[index].pf->ip,1,addr,addr - p->vma[index].addr,len);
+        iunlock(p->vma[index].pf->ip);
+        end_op();
+      }
+      uvmunmap(p->pagetable,addr,len/PGSIZE,1);
+      if(addr==p->vma[index].addr){
+        if(p->vma[index].end==addr+len){
+          fileclose(p->vma[index].pf);
+          p->vma[index].used = 0;
+        }else{
+            p->vma[index].addr = addr+len;
+        }
+      }else if( addr+len == p->vma[index].end){
+        p->vma[index].end = addr+len;
+      }
+      return 0;
+    }
+  }
+
+  return -1;
 }

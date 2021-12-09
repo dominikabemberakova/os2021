@@ -1,3 +1,14 @@
+struct VMA{
+  uint64 addr;
+  uint64 end;
+  int prot;
+  int flags;
+  int fd;
+  int offset;
+  struct file *pf;
+  int used;
+};
+
 // Saved registers for kernel context switches.
 struct context {
   uint64 ra;
@@ -105,4 +116,7 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  int originalsize;
+  struct VMA vma[16];
 };

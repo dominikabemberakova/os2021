@@ -5,6 +5,10 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
+#include "fcntl.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -29,6 +33,62 @@ trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
+int
+lazymmap(pagetable_t pagetable, uint64 va)
+{
+  struct proc *p = myproc();
+
+  if (va > MAXVA || va >= p->sz)
+    return -1;
+  va = PGROUNDDOWN(va);
+
+  int index = 0;
+  for (; index < 16; index++){
+    if (p->vma[index].used == 1 && va >= p->vma[index].addr && va < p->vma[index].end){
+      break;
+    }
+  }
+
+  if (index == 16)
+    return -1;
+
+  uint64 addr = p->vma[index].addr;
+  int prot = p->vma[index].prot;
+  struct file *pf = p->vma[index].pf;
+
+  char *mem;
+  mem = (char *)kalloc();
+
+  if (mem == 0)
+    return -1;
+
+  memset(mem, 0, PGSIZE);
+
+  begin_op();
+  ilock(pf->ip);
+  if (readi(pf->ip, 0, (uint64)mem, va - addr, PGSIZE) < 0){
+    iunlock(pf->ip);
+    end_op();
+    return -1;
+  }
+  iunlock(pf->ip);
+  end_op();
+
+  uint64 f = PTE_U;
+  if (prot & PROT_EXEC)
+    f |= PTE_X;
+  if (prot & PROT_READ)
+    f |= PTE_R;
+  if (prot & PROT_WRITE)
+    f |= PTE_W;
+
+  if (mappages(pagetable, va, PGSIZE, (uint64)mem, f) != 0){
+    kfree(mem);
+    return -1;
+  }
+
+  return 0;
+}
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
@@ -67,6 +127,9 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if(r_scause() == 15 || r_scause() == 13){
+    if(lazymmap(p->pagetable, r_stval()) < 0)
+      p->killed =1;
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
